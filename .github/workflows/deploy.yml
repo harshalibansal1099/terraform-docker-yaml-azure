@@ -1,0 +1,30 @@
+name: 'Azure Terraform & Docker Deploy'
+
+# 1. Trigger: जैसे ही तुम main ब्रांच पर push करोगे, रोबोट काम शुरू कर देगा
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  terraform-and-docker:
+    name: 'Run Terraform and Deploy Docker'
+    runs-on: ubuntu-latest # GitHub की तरफ से मिलने वाला मुफ़्त का कंप्यूटर 💻
+
+    steps:
+    # स्टेप 1: तुम्हारा सारा कोड (main.tf, server.js) इस मुफ़्त कंप्यूटर पर डाउनलोड करना
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # स्टेप 2: इस मुफ़्त कंप्यूटर पर टेराफॉर्म सॉफ्टवेयर सेटअप करना
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
+
+    # स्टेप 3: लॉगिन क्रेडेंशियल्स के बिना सिर्फ कोड चेक करना (init और plan)
+    # हम अभी सीक्रेट्स नहीं जोड़ रहे हैं ताकि तुम तुरंत इसका लाइव रन देख सको!
+    - name: Terraform Init & Validate
+      run: |
+        terraform init
+        terraform validate
