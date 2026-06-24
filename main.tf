@@ -10,7 +10,7 @@ resource "azurerm_virtual_network" "main" {
   resource_group_name = data.azurerm_resource_group.example.name
 }
 
-# 2. सबネット (Subnet)
+# 2. सबनेट (Subnet)
 resource "azurerm_subnet" "internal" {
   name                 = "internal"
   resource_group_name  = data.azurerm_resource_group.example.name
@@ -18,17 +18,17 @@ resource "azurerm_subnet" "internal" {
   address_prefixes     = ["10.0.2.0/24"]
 }
 
-# 3. पब्लिक आईपी (Public IP) - Standard Static SKU
+# 3. पब्लिक आईपी (Public IP)
 resource "azurerm_public_ip" "pip" {
   name                = "nodeapp-public-ip"
   resource_group_name = data.azurerm_resource_group.example.name
   location            = var.location
-  allocation_method   = "Static"   # Standard SKU के लिए Static होना ज़रूरी है
+  allocation_method   = "Static"
   sku                 = "Standard" 
   sku_tier            = "Regional"
 }
 
-# 4. नेटवर्क सिक्योरिटी ग्रुप (NSG) - फायरवॉल रूल्स
+# 4. नेटवर्क收藏िटी ग्रुप (NSG) - यहाँ पोर्ट 3000 खुद खुल जाएगा!
 resource "azurerm_network_security_group" "nsg" {
   name                = "nodeapp-nsg"
   location            = var.location
@@ -41,7 +41,7 @@ resource "azurerm_network_security_group" "nsg" {
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "22" # बदलाव: 3000 की जगह 80 किया
+    destination_port_range     = "22"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
@@ -57,9 +57,22 @@ resource "azurerm_network_security_group" "nsg" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+
+  # ✅ फिक्स 1: पोर्ट 3000 के लिए ऑटोमैटिक दरवाजा बना दिया
+  security_rule {
+    name                       = "NodeApp-Port"
+    priority                   = 1003
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3000"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
-# 5. नेटवर्क इंटरफेस कार्ड (NIC) - Standard Static Support के साथ
+# 5. नेटवर्क इंटरफेस कार्ड (NIC)
 resource "azurerm_network_interface" "nic" {
   name                = "nodeapp-nic"
   resource_group_name = data.azurerm_resource_group.example.name
@@ -68,8 +81,8 @@ resource "azurerm_network_interface" "nic" {
   ip_configuration {
     name                          = "internal"
     subnet_id                     = azurerm_subnet.internal.id
-    private_ip_address_allocation = "Static"      # 👈 पब्लिक आईपी के साथ मैच करने के लिए इसे Static किया
-    private_ip_address            = "10.0.2.10"    # 👈 एक फिक्स प्राइवेट आईपी दे दिया
+    private_ip_address_allocation = "Static"      
+    private_ip_address            = "10.0.2.10"    
     public_ip_address_id          = azurerm_public_ip.pip.id
   }
 }
@@ -80,7 +93,7 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
-# 7. वर्चुअल मशीन (VM)
+# 7. वर्चुअल मशीन (VM) + डॉकर ऑटोमेशन स्क्रिप्ट 🐳
 resource "azurerm_linux_virtual_machine" "main" {
   name                            = "nodeapp-vm"
   resource_group_name             = data.azurerm_resource_group.example.name
@@ -105,4 +118,18 @@ resource "azurerm_linux_virtual_machine" "main" {
     sku       = "22_04-lts"
     version   = "latest"
   }
+
+  # ✅ फिक्स 2: यह जादुई स्क्रिप्ट मशीन ऑन होते ही डॉकर इंस्टॉल करेगी और ऐप चला देगी!
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              sudo apt-get update -y
+              sudo apt-get install -y docker.io
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              
+              # गिटहब से तुम्हारा डॉकर इमेज या पब्लिक इमेज पुल करके चलाना
+              # अभी टेस्टिंग के लिए हम एक स्टैंडर्ड Node.js/Nginx कंटेनर पोर्ट 3000 पर लाइव कर रहे हैं
+              sudo docker run -d -p 3000:80 --name my-web-app nginx
+              EOF
+  )
 }
